@@ -1,7 +1,1 @@
-1. fitur edit
-2. insert data
-3. pagination
-4. live search
-5. filter bages
-6. filter by 
-7. fitur report
+done

@@ -13,15 +13,65 @@ $username = $currentUser['username'] ?? 'User';
 $userJob = $currentUser['job'] ?? 'Member';
 $userInitials = strtoupper(substr($username, 0, 2));
 
-$row = query("SELECT * FROM anima_table");
-$totalPlants = count($row);
+// Pagination settings - responsive limits
+// Desktop: 8, Tablet: 6, Mobile: 4
+$defaultLimits = ['desktop' => 8, 'tablet' => 6, 'mobile' => 4];
+$deviceType = $_COOKIE['device_type'] ?? 'desktop';
+$perPage = $defaultLimits[$deviceType] ?? 8;
 
-// Sample habitat status distribution for demo
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) $page = 1;
+
+// Filter by status
+$filter = $_GET['filter'] ?? 'all';
+$validFilters = ['all', 'stable', 'vulnerable', 'endangered'];
+if (!in_array($filter, $validFilters)) $filter = 'all';
+
+// Sort options
+$sort = $_GET['sort'] ?? 'recent';
+$validSorts = ['recent', 'az', 'za'];
+if (!in_array($sort, $validSorts)) $sort = 'recent';
+
+// Build WHERE clause
+$whereClause = '';
+if ($filter !== 'all') {
+    $filter = mysqli_real_escape_string($conn, $filter);
+    $whereClause = "WHERE status = '$filter'";
+}
+
+// Build ORDER BY clause
+$orderClause = match($sort) {
+    'az' => 'ORDER BY name ASC',
+    'za' => 'ORDER BY name DESC',
+    default => 'ORDER BY idAnima DESC'
+};
+
+// Get total count with filter
+$totalData = query("SELECT COUNT(*) as total FROM anima_table $whereClause")[0]['total'];
+$totalPages = ceil($totalData / $perPage);
+if ($page > $totalPages && $totalPages > 0) $page = $totalPages;
+
+$offset = ($page - 1) * $perPage;
+$row = query("SELECT * FROM anima_table $whereClause $orderClause LIMIT $perPage OFFSET $offset");
+$totalPlants = $totalData;
+
+// Get sidebar badge counts from ALL data (unfiltered)
+$sidebarCounts = query("SELECT status, COUNT(*) as total FROM anima_table GROUP BY status");
 $statusCounts = [
     'stable' => 0,
     'vulnerable' => 0,
     'endangered' => 0
 ];
+foreach ($sidebarCounts as $sc) {
+    if (isset($statusCounts[$sc['status']])) {
+        $statusCounts[$sc['status']] = (int)$sc['total'];
+    }
+}
+
+// livesearch
+if(isset($_POST["cari"])){
+    $row = cari($_POST["keyword"]);
+}
 
 ?>
 <!DOCTYPE html>
@@ -58,7 +108,7 @@ $statusCounts = [
             <nav class="sidebar-nav">
                 <div class="nav-section">
                     <div class="nav-section-title">Main Menu</div>
-                    <a href="index.php" class="nav-item active">
+                    <a href="index.php" class="nav-item <?= $filter === 'all' ? 'active' : '' ?>">
                         <span class="nav-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="3" width="7" height="9"></rect>
@@ -79,7 +129,7 @@ $statusCounts = [
                         </span>
                         <span>Add Species</span>
                     </a>
-                    <a href="#" class="nav-item">
+                    <a href="reports.php" class="nav-item">
                         <span class="nav-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
@@ -92,7 +142,7 @@ $statusCounts = [
 
                 <div class="nav-section">
                     <div class="nav-section-title">Conservation</div>
-                    <a href="#" class="nav-item">
+                    <a href="?filter=vulnerable&sort=<?= $sort ?>" class="nav-item <?= $filter === 'vulnerable' ? 'active' : '' ?>">
                         <span class="nav-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
@@ -100,19 +150,10 @@ $statusCounts = [
                         </span>
                         <span>Vulnerable</span>
                         <span class="nav-badge">
-                            <?php
-                            // Count vulnerable species
-                            $vulnaCount = 0;
-                            foreach ($row as $plant) {
-                                if ($plant['status'] === 'vulnerable') {
-                                    $vulnaCount++;
-                                }
-                            }
-                            echo $vulnaCount;
-                            ?>
+                            <?= $statusCounts['vulnerable'] ?>
                         </span>
                     </a>
-                    <a href="#" class="nav-item">
+                    <a href="?filter=endangered&sort=<?= $sort ?>" class="nav-item <?= $filter === 'endangered' ? 'active' : '' ?>">
                         <span class="nav-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -122,16 +163,7 @@ $statusCounts = [
                         </span>
                         <span>Endangered</span>
                         <span class="nav-badge">
-                            <?php
-                            // Count endangered species
-                            $endangeredCount = 0;
-                            foreach ($row as $plant) {
-                                if ($plant['status'] === 'endangered') {
-                                    $endangeredCount++;
-                                }
-                            }
-                            echo $endangeredCount;
-                            ?>
+                            <?= $statusCounts['endangered'] ?>
                         </span>
                     </a>
                     
@@ -183,7 +215,8 @@ $statusCounts = [
                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                             </svg>
                         </span>
-                        <input type="text" placeholder="Search animals, habitats, or species...">
+                        <input type="search" id="searchInput" placeholder="Search animals, habitats, or species..." autocomplete="off" aria-label="Search">
+                        <div id="searchResults" class="search-results-dropdown"></div>
                     </div>
                 </div>
             </header>
@@ -210,18 +243,17 @@ $statusCounts = [
                 <!-- Filter Bar -->
                 <div class="filter-bar">
                     <div class="filter-chips">
-                        <span class="filter-chip active">All</span>
-                        <span class="filter-chip">Stable</span>
-                        <span class="filter-chip">Vulnerable</span>
-                        <span class="filter-chip">Endangered</span>
+                        <a href="?filter=all&sort=<?= $sort ?>" class="filter-chip <?= $filter === 'all' ? 'active' : '' ?>">All</a>
+                        <a href="?filter=stable&sort=<?= $sort ?>" class="filter-chip <?= $filter === 'stable' ? 'active' : '' ?>">Stable</a>
+                        <a href="?filter=vulnerable&sort=<?= $sort ?>" class="filter-chip <?= $filter === 'vulnerable' ? 'active' : '' ?>">Vulnerable</a>
+                        <a href="?filter=endangered&sort=<?= $sort ?>" class="filter-chip <?= $filter === 'endangered' ? 'active' : '' ?>">Endangered</a>
                     </div>
                     <div class="filter-group" style="margin-left: auto;">
                         <span class="filter-label">Sort:</span>
-                        <select class="filter-select">
-                            <option>Recently Added</option>
-                            <option>Name (A-Z)</option>
-                            <option>Name (Z-A)</option>
-                            <option>Status</option>
+                        <select class="filter-select" onchange="window.location.href='?filter=<?= $filter ?>&sort='+this.value">
+                            <option value="recent" <?= $sort === 'recent' ? 'selected' : '' ?>>Recently Added</option>
+                            <option value="az" <?= $sort === 'az' ? 'selected' : '' ?>>Name (A-Z)</option>
+                            <option value="za" <?= $sort === 'za' ? 'selected' : '' ?>>Name (Z-A)</option>
                         </select>
                     </div>
                 </div>
@@ -291,26 +323,28 @@ $statusCounts = [
                                         data-habitat="<?= htmlspecialchars($r['habitat'] ?? $habitat) ?>"
                                         data-describe="<?= htmlspecialchars($r['describe']) ?>"
                                         data-kingdom="<?= htmlspecialchars($r['kingdom'] ?? 'Animalia') ?>"
-                                        data-phylum="<?= htmlspecialchars($r['phylum'] ?? 'Chordata') ?>"
+                                        data-phylum="<?= htmlspecialchars($r['pylum'] ?? 'Chordata') ?>"
                                         data-class="<?= htmlspecialchars($r['class'] ?? 'Mammalia') ?>"
                                         data-ordo="<?= htmlspecialchars($r['ordo'] ?? '-') ?>"
                                         data-family="<?= htmlspecialchars($r['famili'] ?? '-') ?>"  
                                         data-genus="<?= htmlspecialchars($r['genus'] ?? '-') ?>"
-                                        data-status="<?= htmlspecialchars($status) ?>">
+                                        data-status="<?= htmlspecialchars($status) ?>"
+                                        data-national="<?= htmlspecialchars($r['nationalPlanting'] ?? '-') ?>"
+                                        data-international="<?= htmlspecialchars($r['internationalPlanting'] ?? '-') ?>">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                             <circle cx="12" cy="12" r="3"></circle>
                                         </svg>
                                         View
                                     </button>
-                                    <a href="update.php?id=<?= $r['id'] ?? $i+1 ?>" class="btn btn-secondary btn-sm">
+                                    <a href="update.php?slug=<?= $r['slug'] ?>" class="btn btn-secondary btn-sm">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                         </svg>
                                         Edit
                                     </a>
-                                    <a href="delete.php?id=<?= $r['id'] ?? $i+1 ?>" class="btn btn-outline btn-sm btn-delete" onclick="return confirm('Are you sure you want to delete this species?')">
+                                    <a href="delete.php?slug=<?= $r['slug'] ?>" class="btn btn-outline btn-sm btn-delete" onclick="return confirm('Are you sure you want to delete this species?')">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <polyline points="3 6 5 6 21 6"></polyline>
                                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -346,21 +380,21 @@ $statusCounts = [
                     </div>
 
                     <!-- Pagination -->
-                    <?php if(!empty($row)): ?>
+                    <?php if($totalPages > 1): ?>
                     <div class="pagination">
-                        <button class="pagination-btn" disabled>
+                        <a href="?page=<?= $page - 1 ?>&filter=<?= $filter ?>&sort=<?= $sort ?>" class="pagination-btn <?= $page <= 1 ? 'disabled' : '' ?>" <?= $page <= 1 ? 'onclick="return false;"' : '' ?>>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="15 18 9 12 15 6"></polyline>
                             </svg>
-                        </button>
-                        <button class="pagination-btn active">1</button>
-                        <button class="pagination-btn">2</button>
-                        <button class="pagination-btn">3</button>
-                        <button class="pagination-btn">
+                        </a>
+                        <?php for($i = 1; $i <= $totalPages; $i++): ?>
+                        <a href="?page=<?= $i ?>&filter=<?= $filter ?>&sort=<?= $sort ?>" class="pagination-btn <?= $i == $page ? 'active' : '' ?>"><?= $i ?></a>
+                        <?php endfor; ?>
+                        <a href="?page=<?= $page + 1 ?>&filter=<?= $filter ?>&sort=<?= $sort ?>" class="pagination-btn <?= $page >= $totalPages ? 'disabled' : '' ?>" <?= $page >= $totalPages ? 'onclick="return false;"' : '' ?>>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="9 18 15 12 9 6"></polyline>
                             </svg>
-                        </button>
+                        </a>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -469,6 +503,33 @@ $statusCounts = [
                                 </div>
                             </div>
                         </div>
+                        <div class="row g-4 mt-2">
+                            <div class="col-md-6">
+                                <div class="info-card">
+                                    <h6 class="info-card-title">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M3 3v18h18"></path>
+                                            <path d="m19 9-5 5-4-4-3 3"></path>
+                                        </svg>
+                                        National Planting
+                                    </h6>
+                                    <p class="info-card-text" id="modalNational">-</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-card">
+                                    <h6 class="info-card-title">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                        </svg>
+                                        International Planting
+                                    </h6>
+                                    <p class="info-card-text" id="modalInternational">-</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -508,6 +569,8 @@ $statusCounts = [
             const family = button.getAttribute('data-family');
             const genus = button.getAttribute('data-genus');
             const status = button.getAttribute('data-status');
+            const nationalPlanting = button.getAttribute('data-national');
+            const internationalPlanting = button.getAttribute('data-international');
             
             // Update modal content
             document.getElementById('speciesModalLabel').textContent = name;
@@ -525,6 +588,8 @@ $statusCounts = [
             // Update habitat and description
             document.getElementById('modalHabitat').textContent = habitat || '-';
             document.getElementById('modalDescribe').textContent = describe || '-';
+            document.getElementById('modalNational').textContent = nationalPlanting || '-';
+            document.getElementById('modalInternational').textContent = internationalPlanting || '-';
             
             // Update status badge
             const statusBadge = document.getElementById('modalStatusBadge');
@@ -532,6 +597,147 @@ $statusCounts = [
             statusBadge.className = 'modal-status-badge ' + (status || 'unknown');
         });
     }
+
+    // Responsive pagination - detect device and set cookie
+    (function() {
+        function getDeviceType() {
+            const width = window.innerWidth;
+            if (width >= 1024) return 'desktop';  // 8 items
+            if (width >= 768) return 'tablet';     // 6 items
+            return 'mobile';                        // 4 items
+        }
+        
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+        
+        const currentDevice = getDeviceType();
+        const savedDevice = getCookie('device_type');
+        
+        if (savedDevice !== currentDevice) {
+            document.cookie = `device_type=${currentDevice}; path=/; max-age=86400`;
+            // Only reload if cookie was previously set (not first visit)
+            if (savedDevice !== null) {
+                window.location.href = 'index.php?page=1';
+            } else {
+                // First visit - set cookie and reload to apply
+                window.location.reload();
+            }
+        }
+    })();
+
+    // Live Search functionality
+    (function() {
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        let debounceTimer;
+
+        searchInput.addEventListener('input', function() {
+            const query = this.value.trim();
+            
+            clearTimeout(debounceTimer);
+            
+            if (query.length < 2) {
+                searchResults.innerHTML = '';
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            debounceTimer = setTimeout(() => {
+                fetch(`search_api.php?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.length === 0) {
+                            searchResults.innerHTML = '<div class="search-no-results">No results found</div>';
+                        } else {
+                            searchResults.innerHTML = data.map(item => `
+                                <div class="search-result-item" 
+                                     data-name="${escapeHtml(item.name)}"
+                                     data-image="assets/IMG/${item.image}"
+                                     data-habitat="${escapeHtml(item.habitat)}"
+                                     data-describe="${escapeHtml(item.describe)}"
+                                     data-kingdom="${escapeHtml(item.kingdom)}"
+                                     data-phylum="${escapeHtml(item.pylum)}"
+                                     data-class="${escapeHtml(item.class)}"
+                                     data-ordo="${escapeHtml(item.ordo)}"
+                                     data-family="${escapeHtml(item.famili)}"
+                                     data-genus="${escapeHtml(item.genus)}"
+                                     data-status="${escapeHtml(item.status)}"
+                                     data-national="${escapeHtml(item.nationalPlanting)}"
+                                     data-international="${escapeHtml(item.internationalPlanting)}">
+                                    <img src="assets/IMG/${item.image}" alt="${escapeHtml(item.name)}" class="search-result-img" onerror="this.src='https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=50&h=50&fit=crop'">
+                                    <div class="search-result-info">
+                                        <span class="search-result-name">${escapeHtml(item.name)}</span>
+                                        <span class="search-result-meta">
+                                            <span class="status-dot ${item.status}"></span>
+                                            ${item.habitat}
+                                        </span>
+                                    </div>
+                                </div>
+                            `).join('');
+                        }
+                        searchResults.style.display = 'block';
+                    })
+                    .catch(err => {
+                        console.error('Search error:', err);
+                        searchResults.innerHTML = '<div class="search-no-results">Error searching</div>';
+                        searchResults.style.display = 'block';
+                    });
+            }, 300);
+        });
+
+        // Click on search result to open modal
+        searchResults.addEventListener('click', function(e) {
+            const item = e.target.closest('.search-result-item');
+            if (item) {
+                // Populate modal with data
+                document.getElementById('speciesModalLabel').textContent = item.dataset.name;
+                document.getElementById('modalAnimalImage').src = item.dataset.image;
+                document.getElementById('modalAnimalImage').alt = item.dataset.name;
+                document.getElementById('modalKingdom').textContent = item.dataset.kingdom || 'Animalia';
+                document.getElementById('modalPhylum').textContent = item.dataset.phylum || 'Chordata';
+                document.getElementById('modalClass').textContent = item.dataset.class || 'Mammalia';
+                document.getElementById('modalOrdo').textContent = item.dataset.ordo || '-';
+                document.getElementById('modalFamily').textContent = item.dataset.family || '-';
+                document.getElementById('modalGenus').textContent = item.dataset.genus || '-';
+                document.getElementById('modalHabitat').textContent = item.dataset.habitat || '-';
+                document.getElementById('modalDescribe').textContent = item.dataset.describe || '-';
+                document.getElementById('modalNational').textContent = item.dataset.national || '-';
+                document.getElementById('modalInternational').textContent = item.dataset.international || '-';
+                
+                const statusBadge = document.getElementById('modalStatusBadge');
+                const status = item.dataset.status;
+                statusBadge.textContent = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
+                statusBadge.className = 'modal-status-badge ' + (status || 'unknown');
+
+                // Show modal
+                const modal = new bootstrap.Modal(document.getElementById('speciesModal'));
+                modal.show();
+
+                // Hide search results
+                searchResults.style.display = 'none';
+                searchInput.value = '';
+            }
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.style.display = 'none';
+            }
+        });
+
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    })();
     </script>
 </body>
 </html>
