@@ -336,21 +336,6 @@ if (isset($_POST["submit"])) {
     <script src="assets/js/script.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
     
-    <script>
-    // Image preview functionality
-    const fileInput = document.getElementById('gambar');
-    const imagePreview = document.getElementById('imagePreview');
-    
-    fileInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                imagePreview.innerHTML = `<img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`;
-            }
-            reader.readAsDataURL(file);
-        }
-    });
-    </script>
+    <script src="assets/js/update-image-preview.js"></script>
 </body>
 </html>

@@ -28,36 +28,7 @@ if(isset($_POST['register'])){
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --deep-blue: #0369a1;
-            --deep-blue-dark: #075985;
-            --deep-blue-light: #0ea5e9;
-            --deep-blue-subtle: #e0f2fe;
-            --neutral-grey: #374151;
-            --soft-white: #f9fafb;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, var(--deep-blue-dark) 0%, #0c4a6e 50%, #1e3a5f 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .register-container {
-            width: 100%;
-            max-width: 420px;
-        }
+    <link rel="stylesheet" href="assets/css/regist.css">
         
         .register-card {
             background: white;
