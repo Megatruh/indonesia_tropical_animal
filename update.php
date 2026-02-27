@@ -29,6 +29,7 @@ if (!$data) {
 
 // Handle form submission
 if (isset($_POST["submit"])) {
+    
     if (ubah($_POST) > 0) {
         echo "<script>
             alert('Species updated successfully!');
@@ -67,9 +68,9 @@ if (isset($_POST["submit"])) {
                 <div class="sidebar-brand">
                     <h2>AnimaBase</h2>
                     <span>Animal Database</span>
+                    
                 </div>
             </div>
-
             <nav class="sidebar-nav">
                 <div class="nav-section">
                     <div class="nav-section-title">Main Menu</div>

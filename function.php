@@ -102,3 +102,202 @@ function getCurrentUser() {
     }
     return null;
 }
+
+// ==========================================================================================
+// GENERATE SLUG FROM NAME
+// ==========================================================================================
+function generateSlug($name) {
+    $slug = strtolower($name);
+    $slug = preg_replace('/[^a-z0-9\s-]/', '', $slug); // Remove special characters
+    $slug = preg_replace('/[\s-]+/', '-', $slug); // Replace spaces and multiple dashes with single dash
+    $slug = trim($slug, '-'); // Trim dashes from ends
+    return $slug;
+}
+
+// fungsi untuk mengupload gambar yang akan digunakan untuk tambah atau ubah data -----------------------------------------------------
+function upload(){
+    $namaFile = $_FILES["gambar"]["name"];
+    $ukuranFile = $_FILES["gambar"]["size"];// menggunaan satuan byte, 1 kb = 1000 byte, 1 mb = 1000000 byte
+    $errorFile =  $_FILES["gambar"]["error"];
+    $tempFile = $_FILES["gambar"]["tmp_name"];
+
+    // cek apakah tidak ada gambar yang diupload
+    if ($errorFile === 4){
+        echo "<script>
+        alert('Please select an image to upload!')
+        </script>";
+        return false;
+    }
+
+    //cek apakah yang diupload adalah gambar
+    $ekstensiGambarValid = ['jpg', 'jpeg', 'png'];//ekstensi yang diizinkan
+    $ekstensiGambar = explode('.',$namaFile);// mengambil ekstensi file yang diupload
+    $ekstensiGambar = strtolower(end($ekstensiGambar));// menjadikan ekstensi yang sudah diambil menjadi lowcase
+
+    if(!in_array($ekstensiGambar, $ekstensiGambarValid)){
+        echo "<script>
+        alert('Invalid file type! Please upload JPG, JPEG, or PNG only.')
+        </script>";
+        return false;
+    }
+
+    //cek jika ukurannya terlalu besar
+    if($ukuranFile > 5000000 ) {
+        echo "<script>
+        alert('File size too large! Maximum size is 5MB.')
+        </script>";
+        return false;
+    }
+
+    //generate nama gambar baru untuk mencegah penumpaan foto
+    $namaFileBaru = uniqid();
+    $namaFileBaru .='.'  ;
+    $namaFileBaru  .= $ekstensiGambar;
+
+    //lolos pengecekan
+    move_uploaded_file($tempFile, 'assets/IMG/'.$namaFileBaru);
+
+    return $namaFileBaru;
+}
+
+// ==========================================================================================
+// TAMBAH HEWAN/SPECIES BARU
+// ==========================================================================================
+function tambahHewan($data){
+    global $conn;
+    
+    // Ambil data dari form
+    $name = htmlspecialchars($data["name"]);
+    $habitat = htmlspecialchars($data["habitat"]);
+    $describe = htmlspecialchars($data["describe"]);
+    $kingdom = htmlspecialchars($data["kingdom"] ?? 'Animalia');
+    $slug = generateSlug($name);
+    $pylum = htmlspecialchars($data["pylum"] ?? '');
+    $class = htmlspecialchars($data["class"] ?? '');
+    $ordo = htmlspecialchars($data["ordo"] ?? '');
+    $famili = htmlspecialchars($data["famili"] ?? '');
+    $genus = htmlspecialchars($data["genus"] ?? '');
+    $status = htmlspecialchars($data["status"]);
+    $nationalPlanting = htmlspecialchars($data["nationalPlanting"] ?? '');
+    $internationalPlanting = htmlspecialchars($data["internationalPlanting"] ?? '');
+
+    // Upload gambar
+    $gambar = upload();
+    if (!$gambar) {
+        return false;
+    }
+
+    // Generate slug from name
+    $slug = generateSlug($name);
+    
+    // Query insert data
+    $query = "INSERT INTO anima_table (
+                    name,
+                    slug, 
+                    image, 
+                    habitat, 
+                    `describe`, 
+                    kingdom, 
+                    pylum, 
+                    `class`, 
+                    ordo, 
+                    famili, 
+                    genus, 
+                    status, 
+                    nationalPlanting, 
+                    internationalPlanting) 
+              VALUES (
+                    '$name',
+                    '$slug', 
+                    '$gambar', 
+                    '$habitat', 
+                    '$describe', 
+                    '$kingdom', 
+                    '$pylum', 
+                    '$class', 
+                    '$ordo', 
+                    '$famili', 
+                    '$genus', 
+                    '$status', 
+                    '$nationalPlanting', 
+                    '$internationalPlanting')";
+    
+    mysqli_query($conn, $query);
+    
+    return mysqli_affected_rows($conn);
+}
+
+function ubah($data){
+    global $conn;
+
+    // Ambil data dari form
+    $id = $data["id"];
+    $name = htmlspecialchars($data["name"]);
+  
+    $habitat = htmlspecialchars($data["habitat"]);
+    $describe = htmlspecialchars($data["describe"]);
+    $kingdom = htmlspecialchars($data["kingdom"] ?? 'Animalia');
+    $pylum = htmlspecialchars($data["pylum"] ?? '');
+    $class = htmlspecialchars($data["class"] ?? '');
+    $ordo = htmlspecialchars($data["ordo"] ?? '');
+    $famili = htmlspecialchars($data["famili"] ?? '');
+    $genus = htmlspecialchars($data["genus"] ?? '');
+    $status = htmlspecialchars($data["status"]);
+    $nationalPlanting = htmlspecialchars($data["nationalPlanting"] ?? '');
+    $internationalPlanting = htmlspecialchars($data["internationalPlanting"] ?? '');
+
+    $gambarLama = htmlspecialchars($data["image"]);
+
+    //cek apakah user pilih gambar baru atau tidak
+    if( $_FILES['gambar']['error'] === 4 ){
+        $image = $gambarLama;
+    } else {
+        $image = upload();
+    }
+  
+
+    // Generate slug from name
+    $slug = generateSlug($data["name"]);
+
+    // Query update data
+    $query = "UPDATE anima_table SET 
+                name = '$name',
+                slug = '$slug',
+                habitat = '$habitat',
+                `describe` = '$describe',
+                kingdom = '$kingdom',
+                pylum = '$pylum',
+                `class` = '$class',
+                ordo = '$ordo',
+                famili = '$famili',
+                genus = '$genus',
+                status = '$status',
+                nationalPlanting = '$nationalPlanting',
+                internationalPlanting = '$internationalPlanting',
+                image = '$image'
+                WHERE idAnima = '$id'";
+
+    mysqli_query($conn, $query);
+
+    return mysqli_affected_rows($conn);
+}
+
+function cari($keyword){
+
+    $query = "SELECT * FROM anima_table 
+                WHERE 
+                name LIKE '%$keyword%' OR
+                slug LIKE '%$keyword%' OR
+                habitat LIKE '%$keyword%' OR
+                `describe` LIKE '%$keyword%' OR
+                kingdom LIKE '%$keyword%' OR
+                pylum LIKE '%$keyword%' OR
+                `class` LIKE '%$keyword%' OR
+                ordo LIKE '%$keyword%' OR
+                famili LIKE '%$keyword%' OR
+                genus LIKE '%$keyword%' OR
+                status LIKE '%$keyword%' OR
+                nationalPlanting LIKE '%$keyword%' OR
+                internationalPlanting LIKE '%$keyword%' ";
+    return query($query);
+}

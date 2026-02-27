@@ -5,13 +5,8 @@ session_start();
 $_SESSION = [];
 session_destroy();
 
-// Hapus cookie jika ada
-if (isset($_COOKIE['id'])) {
-    setcookie('id', '', time() - 3600, '/');
-}
-if (isset($_COOKIE['key'])) {
-    setcookie('key', '', time() - 3600, '/');
-}
+setcookie('id', '', time() - 3600);
+setcookie('key', '', time() - 3600);
 
 // Redirect ke login
 header("Location: login.php");
